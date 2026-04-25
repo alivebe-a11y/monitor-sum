@@ -1,0 +1,73 @@
+services:
+
+  # ─── Glances ────────────────────────────────────────────────────
+  glances:
+    image: nicolargo/glances:ubuntu-latest-full
+    container_name: glances
+    restart: unless-stopped
+    pid: host
+    privileged: true
+    environment:
+      - GLANCES_OPT=-w --enable-plugin gpu --cors-allow-origins=*
+      - LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /etc/os-release:/etc/os-release:ro
+    ports:
+      - "61208:61208"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # ─── Scrutiny ───────────────────────────────────────────────────
+  scrutiny:
+    image: ghcr.io/analogj/scrutiny:master-omnibus
+    container_name: scrutiny
+    restart: unless-stopped
+    cap_add:
+      - SYS_RAWIO
+      - SYS_ADMIN
+    ports:
+      - "31054:8080"
+      - "31055:8086"
+    volumes:
+      - ./scrutiny/config:/opt/scrutiny/config
+      - ./scrutiny/influxdb:/opt/scrutiny/influxdb
+      - /run/udev:/run/udev:ro
+    # Add every disk you want monitored — run `smartctl --scan` on host to list them
+    devices:
+      - /dev/sda
+      - /dev/sdb
+      - /dev/sdc
+      - /dev/sdd
+      - /dev/sde
+      - /dev/sdf
+
+  # ─── Ollama ─────────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "30068:11434"
+    volumes:
+      - ./ollama:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # ─── Health Dashboard ───────────────────────────────────────────
+  health-dashboard:
+    build: ./dashboard
+    container_name: health-dashboard
+    restart: unless-stopped
+    ports:
+      - "8090:80"

@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TrueNAS Health</title>
+<style>
+  /* Reset */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* Theme */
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2128;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text2: #8b949e;
+    --text3: #656d76;
+    --green: #3fb950;
+    --green-bg: #0d2818;
+    --yellow: #d29922;
+    --yellow-bg: #2a1f00;
+    --red: #f85149;
+    --red-bg: #2d0f0f;
+    --blue: #58a6ff;
+    --blue-bg: #0c1e3a;
+    --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 2rem;
+  }
+
+  h1 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 1.5rem;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  h1 .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    display: inline-block;
+  }
+
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 10px;
+    max-width: 700px;
+  }
+
+  .field label {
+    font-size: 11px;
+    color: var(--text3);
+    display: block;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  input, select {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 8px 10px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  input:focus, select:focus { border-color: var(--blue); }
+
+  .btn-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 1.5rem;
+    max-width: 700px;
+  }
+
+  button {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+
+  button:hover { background: var(--surface); border-color: #8b949e; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.primary { border-color: var(--blue); color: var(--blue); }
+  button.primary:hover { background: var(--blue-bg); }
+
+  .status-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+  }
+
+  .badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-weight: 500;
+  }
+
+  .badge.ok { background: var(--green-bg); color: var(--green); border: 1px solid #1a4a2a; }
+  .badge.warn { background: var(--yellow-bg); color: var(--yellow); border: 1px solid #4a3500; }
+  .badge.fail { background: var(--red-bg); color: var(--red); border: 1px solid #4a1515; }
+  .badge.info { background: var(--blue-bg); color: var(--blue); border: 1px solid #1a3a5c; }
+  .badge.muted { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
+
+  .metric-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+    margin-bottom: 1.25rem;
+    max-width: 700px;
+  }
+
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+
+  .metric-card .lbl {
+    font-size: 11px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+
+  .metric-card .val {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.2;
+  }
+
+  .metric-card .sub {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    margin-top: 3px;
+  }
+
+  .metric-card .val.warn { color: var(--yellow); }
+  .metric-card .val.danger { color: var(--red); }
+
+  .section-label {
+    font-size: 11px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 8px;
+    margin-top: 1rem;
+  }
+
+  .alerts-box {
+    background: var(--surface);
+    border: 1px solid #4a3500;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 1rem;
+    max-width: 700px;
+  }
+
+  .alert-item {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--yellow);
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .alert-item:last-child { border-bottom: none; }
+  .alert-item.critical { color: var(--red); }
+
+  .drives-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 8px;
+    margin-bottom: 1.25rem;
+    max-width: 700px;
+  }
+
+  .drive-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+
+  .drive-card.fail { border-color: #4a1515; }
+  .drive-card.warn { border-color: #4a3500; }
+
+  .drive-card .drive-name {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+
+  .drive-card .drive-model {
+    font-size: 11px;
+    color: var(--text3);
+    margin-bottom: 7px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .summary-wrap {
+    max-width: 700px;
+    margin-top: 1rem;
+  }
+
+  .summary-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 18px;
+  }
+
+  .summary-box .sum-header {
+    font-size: 11px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .summary-box .sum-text {
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.8;
+    color: var(--text);
+    white-space: pre-wrap;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border: 2px solid var(--border);
+    border-top-color: var(--text2);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .err-box {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--red);
+    margin-bottom: 6px;
+  }
+
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 1.25rem 0;
+    max-width: 700px;
+  }
+
+  .hint {
+    font-size: 11px;
+    color: var(--text3);
+    margin-top: 4px;
+    font-family: var(--mono);
+  }
+</style>
+</head>
+<body>
+
+<h1><span class="dot"></span> TrueNAS Health</h1>
+
+<div class="controls">
+  <div class="field">
+    <label>TrueNAS IP</label>
+    <input type="text" id="host" placeholder="192.168.0.10" />
+  </div>
+  <div class="field">
+    <label>Ollama model</label>
+    <select id="modelSelect"><option value="">— load models first —</option></select>
+    <div class="hint" id="model-hint"></div>
+  </div>
+</div>
+
+<div class="btn-row">
+  <button onclick="loadModels()" id="loadBtn">Load models</button>
+  <button onclick="fetchAll()" id="fetchBtn" class="primary">Fetch + summarise</button>
+</div>
+
+<div id="errors"></div>
+<div id="status-row" class="status-row" style="display:none"></div>
+<div id="metrics" class="metric-grid" style="display:none"></div>
+<div id="alerts-section" style="display:none"></div>
+<div id="drives-section" style="display:none"></div>
+<hr class="divider" id="div1" style="display:none">
+<div id="summary-section" class="summary-wrap" style="display:none">
+  <div class="summary-box">
+    <div class="sum-header">
+      <span id="model-label">AI</span> summary
+      <span id="sum-spinner"></span>
+    </div>
+    <div class="sum-text" id="sum-text"></div>
+  </div>
+</div>
+
+<script>
+const G_PORT = 61208;
+const S_PORT = 31054;
+const O_PORT = 30068;
+
+function getHost() {
+  const v = document.getElementById('host').value.trim();
+  return v.startsWith('http') ? v : 'http://' + v;
+}
+
+function clearErrors() { document.getElementById('errors').innerHTML = ''; }
+
+function showErr(msg) {
+  document.getElementById('errors').innerHTML +=
+    `<div class="err-box">⚠ ${msg}</div>`;
+}
+
+async function safeFetch(url) {
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return await r.json();
+  } catch(e) { return null; }
+}
+
+function badge(label, cls) {
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+async function loadModels() {
+  const host = getHost();
+  if (!host || host === 'http://') { showErr('Enter IP first'); return; }
+  const btn = document.getElementById('loadBtn');
+  btn.textContent = ''; btn.appendChild(Object.assign(document.createElement('span'), {className:'spinner'}));
+  btn.disabled = true;
+  const data = await safeFetch(`${host}:${O_PORT}/api/tags`);
+  btn.textContent = 'Load models'; btn.disabled = false;
+  const sel = document.getElementById('modelSelect');
+  const hint = document.getElementById('model-hint');
+  if (!data || !data.models || !data.models.length) {
+    hint.textContent = 'Could not reach Ollama';
+    sel.innerHTML = '<option value="">No models found</option>';
+    return;
+  }
+  sel.innerHTML = data.models.map(m =>
+    `<option value="${m.name}">${m.name}</option>`).join('');
+  hint.textContent = `${data.models.length} model${data.models.length > 1 ? 's' : ''} available`;
+}
+
+function renderStatus(g, s, o) {
+  const row = document.getElementById('status-row');
+  row.style.display = 'flex';
+  row.innerHTML =
+    badge('Glances ' + (g ? 'ok' : 'unreachable'), g ? 'ok' : 'fail') +
+    badge('Scrutiny ' + (s ? 'ok' : 'unreachable'), s ? 'ok' : 'fail') +
+    badge('Ollama ' + (o ? 'ok' : 'unreachable'), o ? 'ok' : 'fail');
+}
+
+function renderMetrics(cpu, mem, gpu, load, fs) {
+  const el = document.getElementById('metrics');
+  el.style.display = 'grid';
+  let h = '';
+  if (cpu) {
+    const iw = cpu.iowait != null ? cpu.iowait.toFixed(1) : '—';
+    const tot = cpu.total != null ? cpu.total.toFixed(1) : '—';
+    const iwClass = cpu.iowait > 15 ? 'danger' : cpu.iowait > 8 ? 'warn' : '';
+    h += `<div class="metric-card">
+      <div class="lbl">CPU</div>
+      <div class="val">${tot}%</div>
+      <div class="sub">iowait <span class="${iwClass}" style="${iwClass?'color:inherit':''}">${iw}%</span></div>
+    </div>`;
+  }
+  if (mem) {
+    const p = mem.percent != null ? mem.percent.toFixed(1) : '—';
+    const u = mem.used ? (mem.used/1073741824).toFixed(1) : '—';
+    const t = mem.total ? (mem.total/1073741824).toFixed(0) : '—';
+    h += `<div class="metric-card">
+      <div class="lbl">Memory</div>
+      <div class="val">${p}%</div>
+      <div class="sub">${u} / ${t} GB</div>
+    </div>`;
+  }
+  if (load) {
+    h += `<div class="metric-card">
+      <div class="lbl">Load (5m)</div>
+      <div class="val">${load.min5 != null ? load.min5.toFixed(2) : '—'}</div>
+      <div class="sub">${load.cpucore || '?'} cores</div>
+    </div>`;
+  }
+  if (gpu && gpu.length > 0) {
+    const g = gpu[0];
+    h += `<div class="metric-card">
+      <div class="lbl">GPU</div>
+      <div class="val">${g.temperature != null ? g.temperature : '—'}°C</div>
+      <div class="sub">VRAM ${g.mem != null ? g.mem.toFixed(0) : '—'}%</div>
+    </div>`;
+  }
+  if (fs && fs.length > 0) {
+    const root = fs.find(f => f.mnt_point === '/') || fs[0];
+    if (root) {
+      h += `<div class="metric-card">
+        <div class="lbl">Root disk</div>
+        <div class="val">${root.percent != null ? root.percent.toFixed(0) : '—'}%</div>
+        <div class="sub">${root.mnt_point}</div>
+      </div>`;
+    }
+  }
+  el.innerHTML = h;
+}
+
+function renderAlerts(alerts) {
+  const sec = document.getElementById('alerts-section');
+  if (!alerts || !alerts.length) { sec.style.display = 'none'; return; }
+  const active = alerts.filter(a => a.end === 0);
+  if (!active.length) { sec.style.display = 'none'; return; }
+  sec.style.display = 'block';
+  sec.innerHTML = `<div class="section-label">Active alerts (${active.length})</div>
+    <div class="alerts-box">` +
+    active.slice(-6).reverse().map(a => {
+      const cls = a.state === 'CRITICAL' ? 'critical' : '';
+      const procs = (a.top || []).slice(0, 4).join(', ');
+      return `<div class="alert-item ${cls}">${a.state} ${a.type} (${a.min ? a.min.toFixed(1) : '?'}) — ${procs}</div>`;
+    }).join('') +
+    '</div>';
+}
+
+function renderDrives(devices) {
+  const sec = document.getElementById('drives-section');
+  if (!devices || !devices.length) { sec.style.display = 'none'; return; }
+  sec.style.display = 'block';
+  let h = `<div class="section-label">Drive health</div><div class="drives-grid">`;
+  devices.forEach(d => {
+    const passed = d.smart_results ? d.smart_results.passed !== false : null;
+    const pending = d.smart_results && d.smart_results.attrs && d.smart_results.attrs['197']
+      ? d.smart_results.attrs['197'].raw_value : 0;
+    const cls = passed === false ? 'fail' : pending > 0 ? 'warn' : '';
+    const b = passed === false
+      ? `<span class="badge fail">FAIL</span>`
+      : pending > 0
+      ? `<span class="badge warn">${pending} pending</span>`
+      : `<span class="badge ok">healthy</span>`;
+    h += `<div class="drive-card ${cls}">
+      <div class="drive-name">${d.device_name || 'unknown'}</div>
+      <div class="drive-model">${d.device_model || '—'}</div>
+      ${b}
+    </div>`;
+  });
+  h += '</div>';
+  sec.innerHTML = h;
+}
+
+async function streamOllama(host, model, prompt) {
+  const sumText = document.getElementById('sum-text');
+  const spinner = document.getElementById('sum-spinner');
+  const sp = document.createElement('span'); sp.className = 'spinner';
+  spinner.appendChild(sp);
+  sumText.textContent = '';
+  try {
+    const resp = await fetch(`${host}:${O_PORT}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, prompt, stream: true })
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const lines = dec.decode(value).split('\n').filter(l => l.trim());
+      for (const line of lines) {
+        try {
+          const obj = JSON.parse(line);
+          if (obj.response) sumText.textContent += obj.response;
+        } catch(_) {}
+      }
+    }
+  } catch(e) {
+    sumText.textContent = 'Ollama error: ' + e.message;
+  }
+  spinner.innerHTML = '';
+}
+
+async function fetchAll() {
+  const host = getHost();
+  const model = document.getElementById('modelSelect').value;
+  clearErrors();
+  if (!host || host === 'http://') { showErr('Enter your TrueNAS IP'); return; }
+  if (!model) { showErr('Load and select a model first'); return; }
+
+  const btn = document.getElementById('fetchBtn');
+  const sp = document.createElement('span'); sp.className = 'spinner';
+  btn.textContent = ''; btn.appendChild(sp);
+  btn.append(' fetching...');
+  btn.disabled = true;
+
+  document.getElementById('summary-section').style.display = 'none';
+  document.getElementById('div1').style.display = 'none';
+  document.getElementById('model-label').textContent = model;
+
+  const gBase = `${host}:${G_PORT}/api/4`;
+  const sBase = `${host}:${S_PORT}`;
+
+  const [cpu, mem, gpu, load, fs, alert, diskio, scrutiny, ollamaCheck] = await Promise.all([
+    safeFetch(`${gBase}/cpu`),
+    safeFetch(`${gBase}/mem`),
+    safeFetch(`${gBase}/gpu`),
+    safeFetch(`${gBase}/load`),
+    safeFetch(`${gBase}/fs`),
+    safeFetch(`${gBase}/alert`),
+    safeFetch(`${gBase}/diskio`),
+    safeFetch(`${sBase}/api/summary`),
+    safeFetch(`${host}:${O_PORT}/api/tags`),
+  ]);
+
+  const glancesOk = !!(cpu || mem);
+  const scrutinyOk = !!scrutiny;
+  const ollamaOk = !!ollamaCheck;
+
+  renderStatus(glancesOk, scrutinyOk, ollamaOk);
+  if (!glancesOk) showErr(`Glances unreachable at :${G_PORT} — check IP and CORS header`);
+  if (!scrutinyOk) showErr(`Scrutiny unreachable at :${S_PORT}`);
+  if (!ollamaOk) showErr(`Ollama unreachable at :${O_PORT}`);
+
+  if (glancesOk) renderMetrics(cpu, mem, gpu, load, fs);
+  if (alert) renderAlerts(alert);
+
+  let devices = [];
+  if (scrutinyOk && scrutiny) {
+    if (scrutiny.data && scrutiny.data.Summary) {
+      devices = Object.keys(scrutiny.data.Summary).map(k =>
+        ({ device_name: k, ...scrutiny.data.Summary[k] }));
+    } else if (Array.isArray(scrutiny.data)) {
+      devices = scrutiny.data;
+    } else if (scrutiny.devices) {
+      devices = scrutiny.devices;
+    }
+  }
+  renderDrives(devices);
+
+  const payload = {
+    cpu: cpu ? { total_pct: cpu.total, iowait_pct: cpu.iowait } : null,
+    memory: mem ? {
+      used_pct: mem.percent,
+      used_gb: mem.used ? (mem.used / 1073741824).toFixed(1) : null,
+      total_gb: mem.total ? (mem.total / 1073741824).toFixed(0) : null
+    } : null,
+    load: load ? { min1: load.min1, min5: load.min5, min15: load.min15, cpu_cores: load.cpucore } : null,
+    gpu: gpu && gpu.length > 0 ? gpu.map(g => ({
+      name: g.gpu_name || 'GPU', temp_c: g.temperature, vram_pct: g.mem, load_pct: g.gpu
+    })) : null,
+    filesystems: fs ? fs.map(f => ({
+      mount: f.mnt_point,
+      used_pct: f.percent,
+      free_gb: f.free ? (f.free / 1073741824).toFixed(1) : null
+    })) : null,
+    active_alerts: alert
+      ? alert.filter(a => a.end === 0).map(a => ({
+          type: a.type, state: a.state, value: a.min,
+          processes: (a.top || []).slice(0, 4)
+        }))
+      : [],
+    disk_io: diskio ? diskio.slice(0, 8).map(d => ({
+      disk: d.disk_name,
+      read_mb_s: d.read_bytes ? (d.read_bytes / 1048576).toFixed(1) : '0',
+      write_mb_s: d.write_bytes ? (d.write_bytes / 1048576).toFixed(1) : '0'
+    })) : null,
+    smart_health: devices.map(d => ({
+      device: d.device_name,
+      model: d.device_model || '',
+      passed: d.smart_results ? d.smart_results.passed : null,
+      pending_sectors: d.smart_results && d.smart_results.attrs && d.smart_results.attrs['197']
+        ? d.smart_results.attrs['197'].raw_value : 0
+    }))
+  };
+
+  const prompt = `You are a TrueNAS/homelab system health expert. Analyse this system data and give a plain English health summary. Be direct. Flag problems clearly. 3-5 short paragraphs, no bullet points, no markdown formatting.\n\nSystem data:\n${JSON.stringify(payload, null, 2)}\n\nSummarise: overall status, CPU and iowait situation, memory, GPU if present, active alerts and their meaning, drive health issues and urgency.`;
+
+  document.getElementById('div1').style.display = 'block';
+  document.getElementById('summary-section').style.display = 'block';
+  await streamOllama(host, model, prompt);
+
+  btn.textContent = 'Fetch + summarise';
+  btn.disabled = false;
+}
+</script>
+</body>
+</html>
