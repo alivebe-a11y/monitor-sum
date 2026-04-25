@@ -15,8 +15,13 @@ Nothing leaves the local network.
 |------------|--------------------------------------------|-------|--------------------------------|
 | Glances    | nicolargo/glances:ubuntu-latest-full       | 61208 | CPU, RAM, GPU, IO, alerts      |
 | Scrutiny   | ghcr.io/analogj/scrutiny:master-omnibus    | 31054 | SMART drive health + history   |
-| Ollama     | ollama/ollama                              | 30068 | Local LLM inference            |
+| Ollama     | external (existing instance)               | any   | Local LLM inference            |
 | Dashboard  | nginx:alpine (custom)                      | 8090  | The health summary web UI      |
+
+The Ollama service is **not** included in the compose by default — the dashboard
+points at an existing Ollama instance via the "Ollama URL" field in the UI.
+A commented-out Ollama service block is left in `docker-compose.yml` if you'd
+rather run a fresh one inside this stack.
 
 ---
 
@@ -40,13 +45,14 @@ truenas-health-dashboard/
 Single self-contained HTML file. No build step. Served by nginx.
 
 **Behaviour:**
-- User enters TrueNAS IP
-- Clicks "Load models" → hits `http://IP:30068/api/tags` → populates model dropdown
+- User enters TrueNAS IP (used for Glances + Scrutiny) and a full Ollama URL
+  (e.g. `http://192.168.0.10:11434`). Both are persisted to localStorage.
+- Clicks "Load models" → hits `<OLLAMA_URL>/api/tags` → populates model dropdown
 - Clicks "Fetch + summarise" →
   - Fetches from Glances API (port 61208): cpu, mem, gpu, load, fs, alert, diskio
   - Fetches from Scrutiny API (port 31054): /api/summary
   - Packages all data into a compact JSON payload
-  - POSTs to `http://IP:30068/api/generate` with stream:true
+  - POSTs to `<OLLAMA_URL>/api/generate` with stream:true
   - Streams Ollama response token-by-token into the summary box
 
 **System prompt sent to Ollama:**
@@ -113,7 +119,16 @@ errors with "device or resource busy" if a bind mount is already there.
 ### CORS errors in browser
 **Symptom:** Dashboard shows "Glances unreachable" but Glances is running
 **Fix:** Add `--cors-allow-origins=*` to `GLANCES_OPT` environment variable.
-Scrutiny allows CORS by default. Ollama allows CORS by default.
+Scrutiny allows CORS by default.
+
+**Ollama CORS:** Ollama only allows requests from `localhost`/`127.0.0.1` by
+default, so a browser dashboard on another origin gets blocked. Set
+`OLLAMA_ORIGINS=*` (or to your dashboard's specific origin) on the Ollama
+host. Examples:
+
+- systemd: `sudo systemctl edit ollama` → add `Environment="OLLAMA_ORIGINS=*"` → `sudo systemctl restart ollama`
+- macOS app: `launchctl setenv OLLAMA_ORIGINS "*"` then restart Ollama
+- docker: add `-e OLLAMA_ORIGINS=*` to the run/compose
 
 ### Scrutiny device list
 Run on TrueNAS host to get all drives:
@@ -152,14 +167,12 @@ zfs set sync=disabled <poolname>/qbittorrent-dataset
    docker exec scrutiny scrutiny-collector-metrics run
    ```
 3. Open Glances at `http://truenas-ip:61208` — verify GPU tab shows your card
-4. Pull a model into Ollama:
-   ```bash
-   docker exec -it ollama ollama pull llama3.2
-   # or for a smaller/faster model:
-   docker exec -it ollama ollama pull qwen2.5:3b
-   ```
+4. Make sure your existing Ollama has at least one model pulled and is reachable
+   from the dashboard's browser (set `OLLAMA_ORIGINS=*` if not — see above)
 5. Open the dashboard at `http://truenas-ip:8090`
-6. Enter the TrueNAS IP, click Load models, select model, click Fetch + summarise
+6. Enter the TrueNAS IP, enter your Ollama URL (e.g. `http://192.168.0.10:11434`),
+   click Load models, select model, click Fetch + summarise. Both the IP and the
+   Ollama URL are saved in localStorage so you only enter them once.
 
 ---
 

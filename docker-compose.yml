@@ -48,21 +48,28 @@ services:
       - /dev/sdf
 
   # ─── Ollama ─────────────────────────────────────────────────────
-  ollama:
-    image: ollama/ollama
-    container_name: ollama
-    restart: unless-stopped
-    ports:
-      - "30068:11434"
-    volumes:
-      - ./ollama:/root/.ollama
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+  # Using an existing Ollama instance — point the dashboard at it via the
+  # "Ollama URL" field. If you'd rather run Ollama in this stack, uncomment
+  # the block below. Note: the existing Ollama must allow CORS from the
+  # dashboard origin — set OLLAMA_ORIGINS=* (or a specific origin) on it.
+  #
+  # ollama:
+  #   image: ollama/ollama
+  #   container_name: ollama
+  #   restart: unless-stopped
+  #   environment:
+  #     - OLLAMA_ORIGINS=*
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ./ollama:/root/.ollama
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: all
+  #             capabilities: [gpu]
 
   # ─── Health Dashboard ───────────────────────────────────────────
   health-dashboard:

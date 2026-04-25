@@ -57,7 +57,7 @@
 
   .controls {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 10px;
     margin-bottom: 10px;
     max-width: 700px;
@@ -310,6 +310,12 @@
   <div class="field">
     <label>TrueNAS IP</label>
     <input type="text" id="host" placeholder="192.168.0.10" />
+    <div class="hint">used for Glances + Scrutiny</div>
+  </div>
+  <div class="field">
+    <label>Ollama URL</label>
+    <input type="text" id="ollama" placeholder="http://192.168.0.10:11434" />
+    <div class="hint">full URL incl. port</div>
   </div>
   <div class="field">
     <label>Ollama model</label>
@@ -342,12 +348,39 @@
 <script>
 const G_PORT = 61208;
 const S_PORT = 31054;
-const O_PORT = 30068;
+
+const LS_HOST = 'tnh.host';
+const LS_OLLAMA = 'tnh.ollama';
 
 function getHost() {
   const v = document.getElementById('host').value.trim();
   return v.startsWith('http') ? v : 'http://' + v;
 }
+
+function getOllama() {
+  let v = document.getElementById('ollama').value.trim();
+  if (!v) return '';
+  if (!v.startsWith('http')) v = 'http://' + v;
+  return v.replace(/\/+$/, '');
+}
+
+function saveSettings() {
+  try {
+    localStorage.setItem(LS_HOST, document.getElementById('host').value.trim());
+    localStorage.setItem(LS_OLLAMA, document.getElementById('ollama').value.trim());
+  } catch(_) {}
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    const h = localStorage.getItem(LS_HOST);
+    const o = localStorage.getItem(LS_OLLAMA);
+    if (h) document.getElementById('host').value = h;
+    if (o) document.getElementById('ollama').value = o;
+  } catch(_) {}
+  document.getElementById('host').addEventListener('change', saveSettings);
+  document.getElementById('ollama').addEventListener('change', saveSettings);
+});
 
 function clearErrors() { document.getElementById('errors').innerHTML = ''; }
 
@@ -369,12 +402,13 @@ function badge(label, cls) {
 }
 
 async function loadModels() {
-  const host = getHost();
-  if (!host || host === 'http://') { showErr('Enter IP first'); return; }
+  const ollama = getOllama();
+  if (!ollama) { showErr('Enter Ollama URL first (e.g. http://192.168.0.10:11434)'); return; }
+  saveSettings();
   const btn = document.getElementById('loadBtn');
   btn.textContent = ''; btn.appendChild(Object.assign(document.createElement('span'), {className:'spinner'}));
   btn.disabled = true;
-  const data = await safeFetch(`${host}:${O_PORT}/api/tags`);
+  const data = await safeFetch(`${ollama}/api/tags`);
   btn.textContent = 'Load models'; btn.disabled = false;
   const sel = document.getElementById('modelSelect');
   const hint = document.getElementById('model-hint');
@@ -490,14 +524,14 @@ function renderDrives(devices) {
   sec.innerHTML = h;
 }
 
-async function streamOllama(host, model, prompt) {
+async function streamOllama(ollama, model, prompt) {
   const sumText = document.getElementById('sum-text');
   const spinner = document.getElementById('sum-spinner');
   const sp = document.createElement('span'); sp.className = 'spinner';
   spinner.appendChild(sp);
   sumText.textContent = '';
   try {
-    const resp = await fetch(`${host}:${O_PORT}/api/generate`, {
+    const resp = await fetch(`${ollama}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model, prompt, stream: true })
@@ -524,10 +558,13 @@ async function streamOllama(host, model, prompt) {
 
 async function fetchAll() {
   const host = getHost();
+  const ollama = getOllama();
   const model = document.getElementById('modelSelect').value;
   clearErrors();
   if (!host || host === 'http://') { showErr('Enter your TrueNAS IP'); return; }
+  if (!ollama) { showErr('Enter your Ollama URL'); return; }
   if (!model) { showErr('Load and select a model first'); return; }
+  saveSettings();
 
   const btn = document.getElementById('fetchBtn');
   const sp = document.createElement('span'); sp.className = 'spinner';
@@ -551,7 +588,7 @@ async function fetchAll() {
     safeFetch(`${gBase}/alert`),
     safeFetch(`${gBase}/diskio`),
     safeFetch(`${sBase}/api/summary`),
-    safeFetch(`${host}:${O_PORT}/api/tags`),
+    safeFetch(`${ollama}/api/tags`),
   ]);
 
   const glancesOk = !!(cpu || mem);
@@ -561,7 +598,7 @@ async function fetchAll() {
   renderStatus(glancesOk, scrutinyOk, ollamaOk);
   if (!glancesOk) showErr(`Glances unreachable at :${G_PORT} — check IP and CORS header`);
   if (!scrutinyOk) showErr(`Scrutiny unreachable at :${S_PORT}`);
-  if (!ollamaOk) showErr(`Ollama unreachable at :${O_PORT}`);
+  if (!ollamaOk) showErr(`Ollama unreachable at ${ollama} — check URL and OLLAMA_ORIGINS`);
 
   if (glancesOk) renderMetrics(cpu, mem, gpu, load, fs);
   if (alert) renderAlerts(alert);
@@ -619,7 +656,7 @@ async function fetchAll() {
 
   document.getElementById('div1').style.display = 'block';
   document.getElementById('summary-section').style.display = 'block';
-  await streamOllama(host, model, prompt);
+  await streamOllama(ollama, model, prompt);
 
   btn.textContent = 'Fetch + summarise';
   btn.disabled = false;
