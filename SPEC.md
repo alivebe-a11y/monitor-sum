@@ -16,7 +16,7 @@ Nothing leaves the local network.
 | Glances    | nicolargo/glances:ubuntu-latest-full       | 61208 | CPU, RAM, GPU, IO, alerts      |
 | Scrutiny   | ghcr.io/analogj/scrutiny:master-omnibus    | 31054 | SMART drive health + history   |
 | Ollama     | external (existing instance)               | any   | Local LLM inference            |
-| Dashboard  | nginx:alpine (custom)                      | 8090  | The health summary web UI      |
+| Dashboard  | nginx:alpine (bind-mounted index.html)     | 8090  | The health summary web UI      |
 
 The Ollama service is **not** included in the compose by default — the dashboard
 points at an existing Ollama instance via the "Ollama URL" field in the UI.
@@ -30,13 +30,16 @@ rather run a fresh one inside this stack.
 ```
 truenas-health-dashboard/
 ├── SPEC.md                  ← this file
-├── docker-compose.yml       ← full stack compose (all 4 services)
-├── dashboard/
-│   ├── Dockerfile
-│   └── index.html           ← the complete single-file web UI
+├── docker-compose.yml       ← Glances + Scrutiny + dashboard
+├── index.html               ← the complete single-file web UI (bind-mounted into nginx)
 └── glances/
     └── glances.conf         ← optional glances config
 ```
+
+For Dockge: drop `docker-compose.yml` and `index.html` into the stack folder
+(e.g. `/mnt/Pool_1/Configs/Dockge/health/`). No build step — `nginx:alpine`
+serves `index.html` via a read-only bind mount, so editing the file and
+restarting the container picks up changes immediately.
 
 ---
 
@@ -79,33 +82,18 @@ paragraphs, no bullet points, no markdown.
 }
 ```
 
-See `dashboard/index.html` for the complete implementation.
+See `index.html` for the complete implementation.
 
 ---
 
-## 2. Dashboard Dockerfile
-
-```dockerfile
-FROM nginx:alpine
-COPY index.html /usr/share/nginx/html/index.html
-EXPOSE 80
-```
-
-Build and tag:
-```bash
-docker build -t truenas-health-dashboard ./dashboard
-```
-
----
-
-## 3. Full docker-compose.yml
+## 2. Full docker-compose.yml
 
 This is the complete stack. Deploy as a single Dockge stack or split into individual stacks.
 See `docker-compose.yml` in the repository root for the full file.
 
 ---
 
-## 4. Known Issues and Fixes
+## 3. Known Issues and Fixes
 
 ### Glances GPU not showing
 **Symptom:** GPU section empty, `pynvml.NVMLError_LibraryNotFound`
@@ -159,7 +147,7 @@ zfs set sync=disabled <poolname>/qbittorrent-dataset
 
 ---
 
-## 5. First Run After Deploy
+## 4. First Run After Deploy
 
 1. Deploy the stack in Dockge
 2. Open Scrutiny at `http://truenas-ip:31054` and trigger first collection:
@@ -176,7 +164,7 @@ zfs set sync=disabled <poolname>/qbittorrent-dataset
 
 ---
 
-## 6. Environment Details
+## 5. Environment Details
 
 - TrueNAS SCALE (Linux/Debian base)
 - GPU: NVIDIA GeForce GTX 1060 6GB (driver 550.142, CUDA 12.4)
