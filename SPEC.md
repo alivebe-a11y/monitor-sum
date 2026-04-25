@@ -31,15 +31,16 @@ rather run a fresh one inside this stack.
 truenas-health-dashboard/
 ├── SPEC.md                  ← this file
 ├── docker-compose.yml       ← Glances + Scrutiny + dashboard
-├── index.html               ← the complete single-file web UI (bind-mounted into nginx)
+├── html/
+│   └── index.html           ← the complete single-file web UI (bind-mounted into nginx)
 └── glances/
     └── glances.conf         ← optional glances config
 ```
 
-For Dockge: drop `docker-compose.yml` and `index.html` into the stack folder
-(e.g. `/mnt/Pool_1/Configs/Dockge/health/`). No build step — `nginx:alpine`
-serves `index.html` via a read-only bind mount, so editing the file and
-restarting the container picks up changes immediately.
+For Dockge: drop `docker-compose.yml` and the `html/` directory into the stack
+folder (e.g. `/mnt/Pool_1/Configs/Dockge/health/`). No build step —
+`nginx:alpine` serves `html/index.html` via a read-only directory bind mount,
+so editing the file and restarting the container picks up changes immediately.
 
 ---
 
@@ -82,7 +83,7 @@ paragraphs, no bullet points, no markdown.
 }
 ```
 
-See `index.html` for the complete implementation.
+See `html/index.html` for the complete implementation.
 
 ---
 

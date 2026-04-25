@@ -52,4 +52,4 @@ services:
     ports:
       - "8090:80"
     volumes:
-      - ./index.html:/usr/share/nginx/html/index.html:ro
+      - ./html:/usr/share/nginx/html:ro
