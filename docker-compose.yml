@@ -1,6 +1,5 @@
 services:
 
-  # ─── Glances ────────────────────────────────────────────────────
   glances:
     image: nicolargo/glances:ubuntu-latest-full
     container_name: glances
@@ -23,7 +22,6 @@ services:
               count: all
               capabilities: [gpu]
 
-  # ─── Scrutiny ───────────────────────────────────────────────────
   scrutiny:
     image: ghcr.io/analogj/scrutiny:master-omnibus
     container_name: scrutiny
@@ -38,7 +36,7 @@ services:
       - ./scrutiny/config:/opt/scrutiny/config
       - ./scrutiny/influxdb:/opt/scrutiny/influxdb
       - /run/udev:/run/udev:ro
-    # Add every disk you want monitored — run `smartctl --scan` on host to list them
+    # Run `smartctl --scan` on the host to list drives, then add each one here.
     devices:
       - /dev/sda
       - /dev/sdb
@@ -47,31 +45,6 @@ services:
       - /dev/sde
       - /dev/sdf
 
-  # ─── Ollama ─────────────────────────────────────────────────────
-  # Using an existing Ollama instance — point the dashboard at it via the
-  # "Ollama URL" field. If you'd rather run Ollama in this stack, uncomment
-  # the block below. Note: the existing Ollama must allow CORS from the
-  # dashboard origin — set OLLAMA_ORIGINS=* (or a specific origin) on it.
-  #
-  # ollama:
-  #   image: ollama/ollama
-  #   container_name: ollama
-  #   restart: unless-stopped
-  #   environment:
-  #     - OLLAMA_ORIGINS=*
-  #   ports:
-  #     - "11434:11434"
-  #   volumes:
-  #     - ./ollama:/root/.ollama
-  #   deploy:
-  #     resources:
-  #       reservations:
-  #         devices:
-  #           - driver: nvidia
-  #             count: all
-  #             capabilities: [gpu]
-
-  # ─── Health Dashboard ───────────────────────────────────────────
   health-dashboard:
     build: ./dashboard
     container_name: health-dashboard
