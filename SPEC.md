@@ -107,7 +107,14 @@ errors with "device or resource busy" if a bind mount is already there.
 
 ### CORS errors in browser
 **Symptom:** Dashboard shows "Glances unreachable" but Glances is running
-**Fix:** Add `--cors-allow-origins=*` to `GLANCES_OPT` environment variable.
+**Fix:** Glances configures CORS in the `[outputs]` section of `glances.conf`,
+not via a CLI flag. The compose mounts `glances/glances.conf` into the
+container and passes `-C /glances/glances.conf` so the explicit
+`cors_origins=*` setting takes effect.
+
+> Note: there is no `--cors-allow-origins` Glances flag. Setting it on the
+> command line crashes the container with `unrecognized arguments`.
+
 Scrutiny allows CORS by default.
 
 **Ollama CORS:** Ollama only allows requests from `localhost`/`127.0.0.1` by
