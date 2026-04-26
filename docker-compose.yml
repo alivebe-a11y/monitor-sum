@@ -7,11 +7,12 @@ services:
     pid: host
     privileged: true
     environment:
-      - GLANCES_OPT=-w --enable-plugin gpu --cors-allow-origins=*
+      - GLANCES_OPT=-w --enable-plugin gpu -C /glances/glances.conf
       - LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /etc/os-release:/etc/os-release:ro
+      - ./glances/glances.conf:/glances/glances.conf:ro
     ports:
       - "61208:61208"
     deploy:
