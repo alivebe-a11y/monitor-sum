@@ -308,14 +308,9 @@
 
 <div class="controls">
   <div class="field">
-    <label>TrueNAS IP</label>
-    <input type="text" id="host" placeholder="192.168.0.10" />
-    <div class="hint">used for Glances + Scrutiny</div>
-  </div>
-  <div class="field">
     <label>Ollama URL</label>
     <input type="text" id="ollama" placeholder="http://192.168.0.10:11434" />
-    <div class="hint">full URL incl. port</div>
+    <div class="hint">full URL incl. port (must allow CORS via OLLAMA_ORIGINS=*)</div>
   </div>
   <div class="field">
     <label>Ollama model</label>
@@ -346,16 +341,13 @@
 </div>
 
 <script>
-const G_PORT = 61208;
-const S_PORT = 31054;
+// Glances + Scrutiny are reverse-proxied through this same nginx, so we use
+// relative URLs and avoid CORS entirely. Ollama stays on a user-supplied URL
+// (it's external to this stack) and needs OLLAMA_ORIGINS=* on its host.
+const GLANCES_BASE = '/glances/api/4';
+const SCRUTINY_BASE = '/scrutiny/api';
 
-const LS_HOST = 'tnh.host';
 const LS_OLLAMA = 'tnh.ollama';
-
-function getHost() {
-  const v = document.getElementById('host').value.trim();
-  return v.startsWith('http') ? v : 'http://' + v;
-}
 
 function getOllama() {
   let v = document.getElementById('ollama').value.trim();
@@ -366,19 +358,15 @@ function getOllama() {
 
 function saveSettings() {
   try {
-    localStorage.setItem(LS_HOST, document.getElementById('host').value.trim());
     localStorage.setItem(LS_OLLAMA, document.getElementById('ollama').value.trim());
   } catch(_) {}
 }
 
 document.addEventListener('DOMContentLoaded', () => {
   try {
-    const h = localStorage.getItem(LS_HOST);
     const o = localStorage.getItem(LS_OLLAMA);
-    if (h) document.getElementById('host').value = h;
     if (o) document.getElementById('ollama').value = o;
   } catch(_) {}
-  document.getElementById('host').addEventListener('change', saveSettings);
   document.getElementById('ollama').addEventListener('change', saveSettings);
 });
 
@@ -557,11 +545,9 @@ async function streamOllama(ollama, model, prompt) {
 }
 
 async function fetchAll() {
-  const host = getHost();
   const ollama = getOllama();
   const model = document.getElementById('modelSelect').value;
   clearErrors();
-  if (!host || host === 'http://') { showErr('Enter your TrueNAS IP'); return; }
   if (!ollama) { showErr('Enter your Ollama URL'); return; }
   if (!model) { showErr('Load and select a model first'); return; }
   saveSettings();
@@ -576,18 +562,15 @@ async function fetchAll() {
   document.getElementById('div1').style.display = 'none';
   document.getElementById('model-label').textContent = model;
 
-  const gBase = `${host}:${G_PORT}/api/4`;
-  const sBase = `${host}:${S_PORT}`;
-
   const [cpu, mem, gpu, load, fs, alert, diskio, scrutiny, ollamaCheck] = await Promise.all([
-    safeFetch(`${gBase}/cpu`),
-    safeFetch(`${gBase}/mem`),
-    safeFetch(`${gBase}/gpu`),
-    safeFetch(`${gBase}/load`),
-    safeFetch(`${gBase}/fs`),
-    safeFetch(`${gBase}/alert`),
-    safeFetch(`${gBase}/diskio`),
-    safeFetch(`${sBase}/api/summary`),
+    safeFetch(`${GLANCES_BASE}/cpu`),
+    safeFetch(`${GLANCES_BASE}/mem`),
+    safeFetch(`${GLANCES_BASE}/gpu`),
+    safeFetch(`${GLANCES_BASE}/load`),
+    safeFetch(`${GLANCES_BASE}/fs`),
+    safeFetch(`${GLANCES_BASE}/alert`),
+    safeFetch(`${GLANCES_BASE}/diskio`),
+    safeFetch(`${SCRUTINY_BASE}/summary`),
     safeFetch(`${ollama}/api/tags`),
   ]);
 
@@ -596,8 +579,8 @@ async function fetchAll() {
   const ollamaOk = !!ollamaCheck;
 
   renderStatus(glancesOk, scrutinyOk, ollamaOk);
-  if (!glancesOk) showErr(`Glances unreachable at :${G_PORT} — check IP and CORS header`);
-  if (!scrutinyOk) showErr(`Scrutiny unreachable at :${S_PORT}`);
+  if (!glancesOk) showErr('Glances unreachable via /glances/api — check that the glances container is up');
+  if (!scrutinyOk) showErr('Scrutiny unreachable via /scrutiny/api — check that the scrutiny container is up');
   if (!ollamaOk) showErr(`Ollama unreachable at ${ollama} — check URL and OLLAMA_ORIGINS`);
 
   if (glancesOk) renderMetrics(cpu, mem, gpu, load, fs);

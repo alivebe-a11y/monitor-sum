@@ -105,17 +105,21 @@ The nvidia-container-toolkit injects `libnvidia-ml.so.1` automatically into Ubun
 containers. Do NOT manually volume-mount the lib — the toolkit tries to create a symlink and
 errors with "device or resource busy" if a bind mount is already there.
 
-### CORS errors in browser
-**Symptom:** Dashboard shows "Glances unreachable" but Glances is running
-**Fix:** Glances configures CORS in the `[outputs]` section of `glances.conf`,
-not via a CLI flag. The compose mounts `glances/glances.conf` into the
-container and passes `-C /glances/glances.conf` so the explicit
-`cors_origins=*` setting takes effect.
+### CORS — handled by reverse proxying
+The dashboard's nginx (`nginx/default.conf`) reverse-proxies Glances and
+Scrutiny under `/glances/api/` and `/scrutiny/api/`, so the browser only
+ever talks to the dashboard's own origin. CORS is irrelevant for the local
+services. (Glances and Scrutiny don't both have CORS support anyway —
+Scrutiny has none, and the `--cors-allow-origins` Glances flag I had
+originally is fictional. CORS is configured in `[outputs]` in
+`glances.conf` and is left in place as a belt-and-braces measure but isn't
+needed once the proxy is in front.)
 
-> Note: there is no `--cors-allow-origins` Glances flag. Setting it on the
-> command line crashes the container with `unrecognized arguments`.
-
-Scrutiny allows CORS by default.
+**Ollama is the exception.** It's external to this stack (any host/port the
+user already has running), so the dashboard fetches it directly and the
+user must set `OLLAMA_ORIGINS=*` (or a specific origin) on the Ollama
+host. For the TrueNAS SCALE Ollama app, set this in the app's environment
+variables and let it redeploy.
 
 **Ollama CORS:** Ollama only allows requests from `localhost`/`127.0.0.1` by
 default, so a browser dashboard on another origin gets blocked. Set
