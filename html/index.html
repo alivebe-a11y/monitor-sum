@@ -261,12 +261,78 @@
   }
 
   .summary-box .sum-text {
-    font-family: var(--mono);
-    font-size: 13px;
-    line-height: 1.8;
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.65;
     color: var(--text);
-    white-space: pre-wrap;
   }
+
+  .summary-box .sum-text > *:first-child { margin-top: 0; }
+  .summary-box .sum-text > *:last-child { margin-bottom: 0; }
+
+  .summary-box .sum-text h1,
+  .summary-box .sum-text h2,
+  .summary-box .sum-text h3 {
+    font-family: var(--sans);
+    font-weight: 600;
+    color: var(--text);
+    margin: 1.2em 0 0.5em;
+    letter-spacing: -0.01em;
+  }
+  .summary-box .sum-text h1 { font-size: 17px; }
+  .summary-box .sum-text h2 {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text2);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+  }
+  .summary-box .sum-text h3 { font-size: 13px; color: var(--text2); }
+
+  .summary-box .sum-text p { margin: 0 0 0.8em; }
+  .summary-box .sum-text strong { color: var(--text); font-weight: 600; }
+  .summary-box .sum-text em { color: var(--text2); font-style: italic; }
+
+  .summary-box .sum-text code {
+    font-family: var(--mono);
+    font-size: 0.92em;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: var(--blue);
+  }
+  .summary-box .sum-text pre {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    overflow-x: auto;
+    margin: 0.8em 0;
+  }
+  .summary-box .sum-text pre code {
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: var(--text);
+    font-size: 12px;
+  }
+
+  .summary-box .sum-text ul,
+  .summary-box .sum-text ol { margin: 0.4em 0 0.8em 1.4em; }
+  .summary-box .sum-text li { margin: 0.2em 0; }
+
+  .summary-box .sum-text blockquote {
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
+    color: var(--text2);
+    margin: 0.6em 0;
+  }
+
+  .summary-box .sum-text .sev-critical { color: var(--red); font-weight: 600; }
+  .summary-box .sum-text .sev-warning  { color: var(--yellow); font-weight: 600; }
+  .summary-box .sum-text .sev-ok       { color: var(--green); font-weight: 600; }
 
   .spinner {
     display: inline-block;
@@ -387,6 +453,79 @@ async function safeFetch(url) {
 
 function badge(label, cls) {
   return `<span class="badge ${cls}">${label}</span>`;
+}
+
+// Tiny markdown renderer for the streamed AI summary. Supports the subset
+// Claude tends to use: ##/### headings, **bold**, *italic*, `inline code`,
+// ```fenced code blocks```, - / 1. lists, > blockquotes, paragraphs.
+// Input is HTML-escaped before any tag substitution to keep XSS off the
+// table even though the source is a local LLM.
+function escHtml(s) {
+  return s.replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderInline(text) {
+  // Input is already HTML-escaped, so any "<" / ">" present here came
+  // from substitutions we make below — user-supplied tags can't slip in.
+  let h = text;
+  h = h.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  h = h.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+  h = h.replace(/(^|[\s(])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+  h = h.replace(/(^|[\s(])_([^_\n]+)_/g, '$1<em>$2</em>');
+  h = h.replace(/\b(CRITICAL|FAIL|FAILED)\b/g, '<span class="sev-critical">$1</span>');
+  h = h.replace(/\b(WARNING|WARN|CAUTION)\b/g, '<span class="sev-warning">$1</span>');
+  h = h.replace(/\b(OK|HEALTHY|PASS|PASSED)\b/g, '<span class="sev-ok">$1</span>');
+  return h;
+}
+
+function renderMarkdown(src) {
+  const escaped = escHtml(src);
+  const blocks = escaped.split(/\n{2,}/);
+  const out = [];
+  for (let block of blocks) {
+    if (!block.trim()) continue;
+    let m;
+
+    // Fenced code block
+    if (m = block.match(/^```(\w*)\n?([\s\S]*?)```\s*$/)) {
+      out.push(`<pre><code>${m[2].replace(/\n+$/, '')}</code></pre>`);
+      continue;
+    }
+
+    // Heading
+    if (m = block.match(/^(#{1,6})\s+(.+)$/)) {
+      const lvl = Math.min(m[1].length, 3);
+      out.push(`<h${lvl}>${renderInline(m[2])}</h${lvl}>`);
+      continue;
+    }
+
+    // Bullet list
+    const lines = block.split('\n');
+    if (lines.every(l => /^[-*]\s+/.test(l))) {
+      out.push('<ul>' + lines.map(l =>
+        `<li>${renderInline(l.replace(/^[-*]\s+/, ''))}</li>`).join('') + '</ul>');
+      continue;
+    }
+
+    // Numbered list
+    if (lines.every(l => /^\d+\.\s+/.test(l))) {
+      out.push('<ol>' + lines.map(l =>
+        `<li>${renderInline(l.replace(/^\d+\.\s+/, ''))}</li>`).join('') + '</ol>');
+      continue;
+    }
+
+    // Blockquote
+    if (lines.every(l => /^&gt;\s?/.test(l))) {
+      const inner = lines.map(l => l.replace(/^&gt;\s?/, '')).join(' ');
+      out.push(`<blockquote>${renderInline(inner)}</blockquote>`);
+      continue;
+    }
+
+    // Paragraph (single \n becomes a soft break)
+    out.push(`<p>${renderInline(block).replace(/\n/g, '<br>')}</p>`);
+  }
+  return out.join('\n');
 }
 
 async function loadModels() {
@@ -517,7 +656,16 @@ async function streamOllama(ollama, model, prompt) {
   const spinner = document.getElementById('sum-spinner');
   const sp = document.createElement('span'); sp.className = 'spinner';
   spinner.appendChild(sp);
-  sumText.textContent = '';
+  let buf = '';
+  let lastRender = 0;
+  const flush = (force) => {
+    const now = performance.now();
+    if (force || now - lastRender > 80) {
+      sumText.innerHTML = renderMarkdown(buf);
+      lastRender = now;
+    }
+  };
+  sumText.innerHTML = '';
   try {
     const resp = await fetch(`${ollama}/api/generate`, {
       method: 'POST',
@@ -534,10 +682,11 @@ async function streamOllama(ollama, model, prompt) {
       for (const line of lines) {
         try {
           const obj = JSON.parse(line);
-          if (obj.response) sumText.textContent += obj.response;
+          if (obj.response) { buf += obj.response; flush(false); }
         } catch(_) {}
       }
     }
+    flush(true);
   } catch(e) {
     sumText.textContent = 'Ollama error: ' + e.message;
   }
@@ -635,7 +784,34 @@ async function fetchAll() {
     }))
   };
 
-  const prompt = `You are a TrueNAS/homelab system health expert. Analyse this system data and give a plain English health summary. Be direct. Flag problems clearly. 3-5 short paragraphs, no bullet points, no markdown formatting.\n\nSystem data:\n${JSON.stringify(payload, null, 2)}\n\nSummarise: overall status, CPU and iowait situation, memory, GPU if present, active alerts and their meaning, drive health issues and urgency.`;
+  const prompt = [
+    `You are a senior TrueNAS / homelab operator reviewing live telemetry.`,
+    `Write a short health report for the system administrator. Match the tone and formatting of Claude (Anthropic's assistant): direct, technically precise, confidently worded, no filler.`,
+    ``,
+    `# Output rules`,
+    ``,
+    `- Use Markdown. The dashboard renders it (headings, bold, italic, inline code, lists, blockquotes).`,
+    `- Open with a one-line **overall verdict** in bold. No preamble, no "Here is..." — start with the verdict.`,
+    `- Then use \`## Section\` headings for: \`## Compute\` (CPU + load + iowait), \`## Memory\`, \`## GPU\` (only if a GPU is present), \`## Storage\` (filesystems + drive health), \`## Alerts\` (only if there are active alerts), and \`## Action items\` (only if there's something to do — omit if everything is healthy).`,
+    `- Inside each section, prefer 1-3 short prose sentences over bullet lists. Use \`**bold**\` to highlight the specific finding (numbers, drive names, severities). Use \`inline code\` for paths, device names (\`/dev/sde\`), process names (\`txg_sync\`), and exact metric values.`,
+    `- For severities, use the literal uppercase tokens \`CRITICAL\`, \`WARNING\`, or \`OK\` — the dashboard colours them automatically. Don't invent your own labels.`,
+    `- Be confident: state what the data shows ("memory is at 67%"), not what it might show ("memory appears to possibly be"). Never hedge with "it seems", "may be", "could be" unless there's genuine ambiguity in the data.`,
+    `- If a value looks normal, say so briefly and move on. Don't pad. A homelab operator should be able to skim the report in under 15 seconds.`,
+    `- Keep the whole report under 250 words. No closing paragraph, no "let me know if...".`,
+    ``,
+    `# Domain knowledge`,
+    ``,
+    `- Seagate IronWolf drives accumulate \`Raw_Read_Error_Rate\` rapidly by design — that alone is not a failure. The attributes that matter for a SMART verdict are \`Reallocated_Sector_Ct\` (5), \`Current_Pending_Sector\` (197), and \`Offline_Uncorrectable\` (198). \`pending_sectors > 0\` on any drive is **CRITICAL** and warrants immediate replacement.`,
+    `- ZFS \`txg_sync\` showing up in \`CPU_IOWAIT\` top processes means the pool's transaction group sync is blocking on slow disks; the standard fix is an NVMe SLOG vdev. \`storagenode\` and \`qbittorrent-nox\` in the same alert mean those workloads are bottlenecking the pool.`,
+    `- iowait above 15% sustained is **WARNING**; above 25% sustained is **CRITICAL**. Brief spikes during txg sync are normal.`,
+    `- Linux memory percent is misleading because of ARC/cache. Don't flag high used_pct on its own — only flag if both used and there's clear pressure (low free + active swap).`,
+    ``,
+    `# Telemetry`,
+    ``,
+    '```json',
+    JSON.stringify(payload, null, 2),
+    '```'
+  ].join('\n');
 
   document.getElementById('div1').style.display = 'block';
   document.getElementById('summary-section').style.display = 'block';
