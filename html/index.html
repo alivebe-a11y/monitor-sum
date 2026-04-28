@@ -119,6 +119,54 @@
     margin-bottom: 1.25rem;
   }
 
+  .service-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+    margin-bottom: 1.25rem;
+    max-width: 700px;
+  }
+
+  .service-tile {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: var(--text);
+    text-decoration: none;
+    transition: background 0.15s, border-color 0.15s, transform 0.05s;
+  }
+  .service-tile:hover {
+    background: var(--surface2);
+    border-color: var(--blue);
+  }
+  .service-tile:active { transform: translateY(1px); }
+
+  .service-tile .svc-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 2px;
+  }
+  .service-tile .svc-desc {
+    font-size: 11px;
+    color: var(--text3);
+  }
+  .service-tile .svc-port {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--blue-bg);
+    color: var(--blue);
+    border: 1px solid #1a3a5c;
+    padding: 3px 8px;
+    border-radius: 12px;
+    white-space: nowrap;
+  }
+
   .badge {
     font-family: var(--mono);
     font-size: 11px;
@@ -390,6 +438,23 @@
   <button onclick="fetchAll()" id="fetchBtn" class="primary">Fetch + summarise</button>
 </div>
 
+<div class="service-tiles">
+  <a id="tile-glances" class="service-tile" target="_blank" rel="noopener">
+    <div>
+      <div class="svc-name">Glances</div>
+      <div class="svc-desc">CPU, memory, GPU, alerts</div>
+    </div>
+    <span class="svc-port">:61208</span>
+  </a>
+  <a id="tile-scrutiny" class="service-tile" target="_blank" rel="noopener">
+    <div>
+      <div class="svc-name">Scrutiny</div>
+      <div class="svc-desc">SMART drive health</div>
+    </div>
+    <span class="svc-port">:31054</span>
+  </a>
+</div>
+
 <div id="errors"></div>
 <div id="status-row" class="status-row" style="display:none"></div>
 <div id="metrics" class="metric-grid" style="display:none"></div>
@@ -434,6 +499,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (o) document.getElementById('ollama').value = o;
   } catch(_) {}
   document.getElementById('ollama').addEventListener('change', saveSettings);
+
+  // Wire service tiles to <host>:<mapped-port> using the host the user is
+  // actually browsing the dashboard at — works whether that's an IP, a
+  // hostname, or a Tailscale magic-DNS name.
+  const host = window.location.hostname || 'localhost';
+  const proto = window.location.protocol === 'https:' ? 'https:' : 'http:';
+  document.getElementById('tile-glances').href = `${proto}//${host}:61208`;
+  document.getElementById('tile-scrutiny').href = `${proto}//${host}:31054/web/dashboard`;
 });
 
 function clearErrors() { document.getElementById('errors').innerHTML = ''; }
